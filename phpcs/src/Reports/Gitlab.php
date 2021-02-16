@@ -33,31 +33,34 @@ class Gitlab implements Report {
      * @inheritDoc
      */
     public function generateFileReport($report, File $phpcsFile, $showSources = false, $width = 80) {
-        $filename = str_replace('\\', '\\\\', $report['filename']);
-        $filename = str_replace('"', '\"', $filename);
-        $filename = str_replace('/', '\/', $filename);
-        $messages = '';
+        $hasOutput = false;
+
         foreach ($report['messages'] as $line => $lineErrors) {
             foreach ($lineErrors as $column => $colErrors) {
                 foreach ($colErrors as $error) {
-                    $error['message'] = str_replace("\n", '\n', $error['message']);
-                    $error['message'] = str_replace("\r", '\r', $error['message']);
-                    $error['message'] = str_replace("\t", '\t', $error['message']);
+                    $issue = [
+                        'type' => 'issue',
+                        'categories' => ['Style'],
+                        'check_name' => $error['source'],
+                        'fingerprint' => md5($report['filename'] . $error['message'] . $line . $column),
+                        'severity' => $error['type'] === 'ERROR' ? 'major' : 'minor',
+                        'description' => str_replace(["\n", "\r", "\t"], ['\n', '\r', '\t'], $error['message']),
+                        'location' => [
+                            'path' => $report['filename'],
+                            'lines' => [
+                                'begin' => $line,
+                                'end' => $line,
+                            ]
+                        ],
+                    ];
 
-                    $messagesObject = new \stdClass();
-                    $messagesObject->description = $error['message'];
-                    $messagesObject->fingerprint = $error['source'];
-                    $messagesObject->severity = strtolower($error['type']);
-                    $messagesObject->location = new \stdClass();
-                    $messagesObject->location->path = $filename;
-                    $messagesObject->location->lines = new \stdClass();
-                    $messagesObject->location->lines->begin = $line;
-                    $messages .= json_encode($messagesObject).",";
+                    echo json_encode($issue, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . ',';
+                    $hasOutput = true;
                 }
             }
         }
-        echo rtrim($messages, ',');
-        return true;
+
+        return $hasOutput;
     }
 
     /**
@@ -65,8 +68,6 @@ class Gitlab implements Report {
      */
     public function generate($cachedData, $totalFiles, $totalErrors, $totalWarnings, $totalFixable, $showSources = false,
         $width = 80, $interactive = false, $toScreen = true) {
-        echo '[';
-        echo rtrim($cachedData, ',');
-        echo "]".PHP_EOL;
+        echo '[' . rtrim($cachedData, ',') . ']' . PHP_EOL;
     }
 }
